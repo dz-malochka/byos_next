@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { PageTemplate } from "@/components/common/page-template";
 import { ScreenPreviewImage } from "@/components/common/screen-preview-image";
+import { RecipeActionsMenu } from "@/components/recipes/recipe-actions-menu";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { type CatalogRecipe, listAllRecipes } from "@/lib/recipes/catalog";
@@ -11,6 +12,7 @@ import {
 	DEFAULT_IMAGE_WIDTH,
 } from "@/lib/recipes/constants";
 import { buildBitmapPreviewSrc } from "@/lib/render/preview-image";
+import { cn } from "@/lib/utils";
 
 const RecipeCard = ({
 	recipe,
@@ -85,6 +87,29 @@ const RecipeCard = ({
 	);
 };
 
+/** A recipe card plus its actions menu overlay (duplicate/rename/hide/delete). */
+const RecipeCardWithActions = ({
+	recipe,
+	priority = false,
+}: {
+	recipe: CatalogRecipe;
+	priority?: boolean;
+}) => {
+	return (
+		<div className={cn("relative", recipe.hidden && "opacity-60")}>
+			<RecipeCard recipe={recipe} priority={priority} />
+			<div className="absolute right-2 top-2 z-20">
+				<RecipeActionsMenu
+					slug={recipe.slug}
+					name={recipe.name}
+					owned={recipe.owned}
+					hidden={recipe.hidden}
+				/>
+			</div>
+		</div>
+	);
+};
+
 const RecipeCardSkeleton = () => {
 	return (
 		<div className="flex h-full flex-col overflow-hidden rounded-xl border bg-card">
@@ -147,7 +172,11 @@ const CategorySection = ({
 			</div>
 			<div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
 				{recipes.map((recipe, index) => (
-					<RecipeCard key={recipe.slug} recipe={recipe} priority={index < 3} />
+					<RecipeCardWithActions
+						key={recipe.slug}
+						recipe={recipe}
+						priority={index < 3}
+					/>
 				))}
 			</div>
 		</section>
@@ -156,8 +185,10 @@ const CategorySection = ({
 
 async function RecipesGrid() {
 	const allRecipes = await listAllRecipes();
+	const visible = allRecipes.filter((r) => !r.hidden);
+	const hidden = allRecipes.filter((r) => r.hidden);
 
-	const recipesByCategory = allRecipes.reduce(
+	const recipesByCategory = visible.reduce(
 		(acc, recipe) => {
 			const category = (recipe.category || "uncategorized").split(",")[0];
 			if (!acc[category]) acc[category] = [];
@@ -178,6 +209,9 @@ async function RecipesGrid() {
 					recipes={recipesByCategory[category]}
 				/>
 			))}
+			{hidden.length > 0 && (
+				<CategorySection category="Hidden" recipes={hidden} />
+			)}
 		</div>
 	);
 }

@@ -78,6 +78,8 @@ export type Mixup = {
 	id: string;
 	name: string;
 	layout_id: string;
+	/** Custom free-form split-tree layout; null means render from layout_id preset. */
+	layout_tree: unknown | null;
 	created_at: string | null;
 	updated_at: string | null;
 };
@@ -87,6 +89,8 @@ export type MixupSlot = {
 	mixup_id: string | null;
 	slot_id: string;
 	recipe_id: string | null;
+	playlist_id: string | null;
+	current_index: number;
 	order_index: number;
 	created_at: string | null;
 };

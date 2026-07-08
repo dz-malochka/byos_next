@@ -11,14 +11,21 @@ export const reactRecipeLoaders: Record<string, RecipeModuleLoader> = {
 	calendar: () => import("../../app/(app)/recipes/screens/calendar/calendar"),
 	"hacker-news": () =>
 		import("../../app/(app)/recipes/screens/hacker-news/hacker-news"),
+	"internet-availability": () =>
+		import(
+			"../../app/(app)/recipes/screens/internet-availability/internet-availability"
+		),
 	"local-news": () =>
 		import("../../app/(app)/recipes/screens/local-news/local-news"),
+	"month-of-year": () =>
+		import("../../app/(app)/recipes/screens/month-of-year/month-of-year"),
 	"not-found": () =>
 		import("../../app/(app)/recipes/screens/not-found/not-found"),
 	"responsive-example": () =>
 		import(
 			"../../app/(app)/recipes/screens/responsive-example/responsive-example"
 		),
+	"rss-feed": () => import("../../app/(app)/recipes/screens/rss-feed/rss-feed"),
 	"simple-text": () =>
 		import("../../app/(app)/recipes/screens/simple-text/simple-text"),
 	weather: () => import("../../app/(app)/recipes/screens/weather/weather"),
@@ -32,9 +39,12 @@ export const reactRecipeSlugs = [
 	"bitmap-patterns",
 	"calendar",
 	"hacker-news",
+	"internet-availability",
 	"local-news",
+	"month-of-year",
 	"not-found",
 	"responsive-example",
+	"rss-feed",
 	"simple-text",
 	"weather",
 	"wikipedia",

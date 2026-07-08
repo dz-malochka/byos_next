@@ -6,6 +6,13 @@ import { useMemo, useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import type {
 	RecipeParamDefinition,
@@ -65,6 +72,24 @@ const renderField = (
 					checked={value === true}
 					onCheckedChange={(checked) => onChange(key, checked)}
 				/>
+			);
+		case "enum":
+			return (
+				<Select
+					value={typeof value === "string" ? value : ""}
+					onValueChange={(next) => onChange(key, next)}
+				>
+					<SelectTrigger id={key} className="w-full">
+						<SelectValue placeholder="Select…" />
+					</SelectTrigger>
+					<SelectContent>
+						{(definition.options ?? []).map((option) => (
+							<SelectItem key={option.value} value={option.value}>
+								{option.label}
+							</SelectItem>
+						))}
+					</SelectContent>
+				</Select>
 			);
 		case "number":
 			return (

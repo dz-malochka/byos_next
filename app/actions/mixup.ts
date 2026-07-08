@@ -2,12 +2,17 @@
 
 import { revalidatePath } from "next/cache";
 import { getCurrentUserId } from "@/lib/auth/get-user";
-import type { MixupLayoutId as DbMixupLayoutId } from "@/lib/database/db.d";
+import type {
+	MixupLayoutId as DbMixupLayoutId,
+	JsonValue,
+} from "@/lib/database/db.d";
 import {
 	withUserScope,
 	withUserScopeTransaction,
 } from "@/lib/database/scoped-db";
 import { checkDbConnection } from "@/lib/database/utils";
+import type { SlotAssignment } from "@/lib/mixup/constants";
+import type { MixupNode } from "@/lib/mixup/layout-tree";
 import type { Mixup, MixupSlot, Recipe } from "@/lib/types";
 
 /**
@@ -60,6 +65,8 @@ export async function fetchMixupWithSlots(mixupId: string): Promise<{
 					"mixup_slots.mixup_id",
 					"mixup_slots.slot_id",
 					"mixup_slots.recipe_id",
+					"mixup_slots.playlist_id",
+					"mixup_slots.current_index",
 					"mixup_slots.order_index",
 					"mixup_slots.created_at",
 				])
@@ -198,7 +205,10 @@ export async function saveMixupWithSlots(mixupData: {
 	id?: string;
 	name: string;
 	layout_id: string;
-	assignments: Record<string, string>; // slot_id -> recipe_id (UUID)
+	// slot_id -> what that slot displays (a recipe or a playlist).
+	assignments: Record<string, SlotAssignment>;
+	// Free-form split-tree layout. `null`/omitted keeps the preset layout_id.
+	layout_tree?: MixupNode | null;
 }): Promise<{ success: boolean; mixupId?: string; error?: string }> {
 	const { ready } = await checkDbConnection();
 
@@ -214,6 +224,8 @@ export async function saveMixupWithSlots(mixupData: {
 			let mixupId: string;
 
 			// Create or update mixup
+			const layoutTree = (mixupData.layout_tree ?? null) as JsonValue;
+
 			if (mixupData.id) {
 				// Update existing mixup (RLS handles user check)
 				await trx
@@ -221,6 +233,7 @@ export async function saveMixupWithSlots(mixupData: {
 					.set({
 						name: mixupData.name,
 						layout_id: mixupData.layout_id as DbMixupLayoutId,
+						layout_tree: layoutTree,
 						updated_at: new Date().toISOString(),
 					})
 					.where("id", "=", mixupData.id)
@@ -240,6 +253,7 @@ export async function saveMixupWithSlots(mixupData: {
 					.values({
 						name: mixupData.name,
 						layout_id: mixupData.layout_id as DbMixupLayoutId,
+						layout_tree: layoutTree,
 						user_id: userId,
 					})
 					.returning("id")
@@ -248,15 +262,18 @@ export async function saveMixupWithSlots(mixupData: {
 				mixupId = newMixup.id;
 			}
 
-			// Insert new slots
+			// Insert new slots. A slot points at either a recipe or a playlist.
 			const slotEntries = Object.entries(mixupData.assignments);
 			if (slotEntries.length > 0) {
-				const slotsToInsert = slotEntries.map(([slotId, recipeId], index) => ({
-					mixup_id: mixupId,
-					slot_id: slotId,
-					recipe_id: recipeId || null,
-					order_index: index,
-				}));
+				const slotsToInsert = slotEntries.map(
+					([slotId, assignment], index) => ({
+						mixup_id: mixupId,
+						slot_id: slotId,
+						recipe_id: assignment.kind === "recipe" ? assignment.id : null,
+						playlist_id: assignment.kind === "playlist" ? assignment.id : null,
+						order_index: index,
+					}),
+				);
 
 				await trx.insertInto("mixup_slots").values(slotsToInsert).execute();
 			}
@@ -288,5 +305,77 @@ export async function fetchRecipes(): Promise<Recipe[]> {
 		scopedDb.selectFrom("recipes").selectAll().orderBy("name", "asc").execute(),
 	);
 
-	return recipes as unknown as Recipe[];
+	// Overlay per-user recipe preferences: skip hidden recipes and use the
+	// user's rename override for the display name. Degrades gracefully if the
+	// recipe_prefs migration hasn't been applied yet.
+	let prefs: Array<{ slug: string; name: string | null; hidden: boolean }> = [];
+	try {
+		prefs = await withUserScope((scopedDb) =>
+			scopedDb
+				.selectFrom("recipe_prefs")
+				.select(["slug", "name", "hidden"])
+				.execute(),
+		);
+	} catch (error) {
+		console.warn("[mixup] recipe_prefs unavailable:", error);
+	}
+	const prefBySlug = new Map(prefs.map((p) => [p.slug, p]));
+
+	const visible = recipes
+		.filter((recipe) => !prefBySlug.get(recipe.slug)?.hidden)
+		.map((recipe) => {
+			const override = prefBySlug.get(recipe.slug)?.name;
+			return override?.trim() ? { ...recipe, name: override } : recipe;
+		});
+
+	return visible as unknown as Recipe[];
+}
+
+export type MixupPreviewDevice = {
+	id: string;
+	name: string;
+	model: string | null;
+	palette_id: string | null;
+	screen_width: number | null;
+	screen_height: number | null;
+	screen_orientation: string | null;
+};
+
+/**
+ * Devices the current user owns, with just the fields needed to preview a
+ * mixup on a specific device's display (profile + resolution/orientation).
+ */
+export async function fetchMixupDevices(): Promise<MixupPreviewDevice[]> {
+	const { ready } = await checkDbConnection();
+
+	if (!ready) {
+		console.warn("Database client not initialized");
+		return [];
+	}
+
+	const devices = await withUserScope((scopedDb) =>
+		scopedDb
+			.selectFrom("devices")
+			.select([
+				"id",
+				"name",
+				"model",
+				"palette_id",
+				"screen_width",
+				"screen_height",
+				"screen_orientation",
+			])
+			.orderBy("name", "asc")
+			.execute(),
+	);
+
+	return devices.map((d) => ({
+		id: String(d.id),
+		name: d.name,
+		model: d.model,
+		palette_id: d.palette_id,
+		screen_width: d.screen_width,
+		screen_height: d.screen_height,
+		screen_orientation: d.screen_orientation,
+	}));
 }

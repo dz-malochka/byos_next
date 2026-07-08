@@ -1,5 +1,10 @@
 import { connection } from "next/server";
-import { fetchMixups, fetchRecipes } from "@/app/actions/mixup";
+import {
+	fetchMixupDevices,
+	fetchMixups,
+	fetchRecipes,
+} from "@/app/actions/mixup";
+import { fetchPlaylists } from "@/app/actions/playlist";
 import DbNotConfiguredErrorCard from "@/components/error-cards/db-not-configured-error-card";
 import { getDbStatus } from "@/lib/database/utils";
 import MixupClientPage from "./client-page";
@@ -18,7 +23,12 @@ export default async function MixupPage() {
 		return <DbNotConfiguredErrorCard status={dbStatus} pageName="Mixups" />;
 	}
 
-	const [mixups, recipes] = await Promise.all([fetchMixups(), fetchRecipes()]);
+	const [mixups, recipes, playlists, devices] = await Promise.all([
+		fetchMixups(),
+		fetchRecipes(),
+		fetchPlaylists(),
+		fetchMixupDevices(),
+	]);
 
 	const availableRecipes = recipes.map((r) => ({
 		id: r.id,
@@ -27,5 +37,17 @@ export default async function MixupPage() {
 		description: r.description ?? undefined,
 	}));
 
-	return <MixupClientPage initialMixups={mixups} recipes={availableRecipes} />;
+	const availablePlaylists = playlists.map((p) => ({
+		id: p.id,
+		name: p.name,
+	}));
+
+	return (
+		<MixupClientPage
+			initialMixups={mixups}
+			recipes={availableRecipes}
+			playlists={availablePlaylists}
+			devices={devices}
+		/>
+	);
 }

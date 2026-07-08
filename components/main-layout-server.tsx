@@ -64,10 +64,12 @@ export default async function MainLayout({
 	// recipes (DB). No request-time sync needed — built-ins always show
 	// up even on a cold-install database.
 	const allRecipes = await listAllRecipes();
-	const recipeSidebarItems = allRecipes.map((r) => ({
-		slug: r.slug,
-		name: r.name,
-	}));
+	const recipeSidebarItems = allRecipes
+		.filter((r) => !r.hidden)
+		.map((r) => ({
+			slug: r.slug,
+			name: r.name,
+		}));
 
 	const toolsComponents = Object.entries(tools)
 		.filter(

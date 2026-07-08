@@ -8,7 +8,7 @@ import {
 	updateScreenParams,
 } from "@/app/actions/screens-params";
 import { PageTemplate } from "@/components/common/page-template";
-import { DeleteRecipeButton } from "@/components/recipes/delete-recipe-button";
+import { RecipeActionsMenu } from "@/components/recipes/recipe-actions-menu";
 import { RecipePreviewStage } from "@/components/recipes/recipe-preview-stage";
 import RecipeProps from "@/components/recipes/recipe-props";
 import { ScreenParamsForm } from "@/components/recipes/screen-params-form";
@@ -16,7 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { getCurrentUserId } from "@/lib/auth/get-user";
 import { withUserScope } from "@/lib/database/scoped-db";
 import { checkDbConnection } from "@/lib/database/utils";
-import { listAllRecipes } from "@/lib/recipes/catalog";
+import { getRecipeManageInfo, listAllRecipes } from "@/lib/recipes/catalog";
 import {
 	DEFAULT_IMAGE_HEIGHT,
 	DEFAULT_IMAGE_WIDTH,
@@ -246,11 +246,29 @@ export default async function RecipePage({
 	const imageWidth = isPortrait ? DEFAULT_IMAGE_HEIGHT : DEFAULT_IMAGE_WIDTH;
 	const imageHeight = isPortrait ? DEFAULT_IMAGE_WIDTH : DEFAULT_IMAGE_HEIGHT;
 
+	// Default the preview's device dropdown to the user's device — their only
+	// device, or the first (by name) when they have several.
+	const { ready: dbReady } = await checkDbConnection();
+	const preferredDevice = dbReady
+		? await withUserScope((scopedDb) =>
+				scopedDb
+					.selectFrom("devices")
+					.select(["model", "palette_id"])
+					.orderBy("name", "asc")
+					.executeTakeFirst(),
+			)
+		: undefined;
+	const preferredModelName = preferredDevice?.model ?? undefined;
+	const preferredPaletteId = preferredDevice?.palette_id ?? undefined;
+
+	const manage = await getRecipeManageInfo(slug);
+
 	// React recipe path
 	const resolved = await resolveReactRecipe(slug);
 	if (resolved) {
 		const { definition, params: resolvedParams, data } = resolved;
 		const meta = definition.meta;
+		const displayName = manage.nameOverride ?? meta.title;
 		const paramDefinitions = zodObjectToParamDefinitions(
 			definition.paramsSchema,
 		);
@@ -266,7 +284,7 @@ export default async function RecipePage({
 					title={
 						<div className="flex flex-wrap items-center gap-x-3 gap-y-1">
 							<h1 className="text-2xl font-bold tracking-tight">
-								{meta.title}
+								{displayName}
 							</h1>
 							<MetaChips
 								type="react"
@@ -291,13 +309,26 @@ export default async function RecipePage({
 							)}
 						</>
 					}
-					left={meta.system ? null : <DeleteRecipeButton slug={slug} />}
+					left={
+						meta.system ? null : (
+							<RecipeActionsMenu
+								slug={slug}
+								name={displayName}
+								owned={manage.owned}
+								hidden={manage.hidden}
+								deletedHref="/recipes"
+								variant="button"
+							/>
+						)
+					}
 				>
 					<RecipePreviewStage
 						slug={slug}
 						isPortrait={isPortrait}
 						trmnlModels={trmnlModels}
 						trmnlPalettes={trmnlPalettes}
+						preferredModelName={preferredModelName}
+						preferredPaletteId={preferredPaletteId}
 						deviceNode={<EmptyState>Device preview unavailable</EmptyState>}
 						reactNode={
 							<Suspense fallback={<LoadingState label="Rendering recipe…" />}>
@@ -352,7 +383,7 @@ export default async function RecipePage({
 	const liquidMeta = await fetchLiquidRecipeMeta(slug);
 	if (!liquidMeta) notFound();
 
-	const title = liquidMeta.name;
+	const title = manage.nameOverride ?? liquidMeta.name;
 	const description = liquidMeta.description;
 
 	const userId = (await getCurrentUserId()) ?? undefined;
@@ -393,13 +424,24 @@ export default async function RecipePage({
 						</p>
 					) : null
 				}
-				left={<DeleteRecipeButton slug={slug} />}
+				left={
+					<RecipeActionsMenu
+						slug={slug}
+						name={title}
+						owned={manage.owned}
+						hidden={manage.hidden}
+						deletedHref="/recipes"
+						variant="button"
+					/>
+				}
 			>
 				<RecipePreviewStage
 					slug={slug}
 					isPortrait={isPortrait}
 					trmnlModels={trmnlModels}
 					trmnlPalettes={trmnlPalettes}
+					preferredModelName={preferredModelName}
+					preferredPaletteId={preferredPaletteId}
 					simulateReactPreviewInIframe={false}
 					deviceNode={<EmptyState>Device preview unavailable</EmptyState>}
 					reactNode={

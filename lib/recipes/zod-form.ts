@@ -7,7 +7,12 @@ import { z } from "zod";
  * sources (e.g. liquid plugin custom_fields) without coupling the form to
  * Zod's internals.
  */
-export type RecipeParamType = "string" | "number" | "boolean";
+export type RecipeParamType = "string" | "number" | "boolean" | "enum";
+
+export type RecipeParamOption = {
+	value: string;
+	label: string;
+};
 
 export type RecipeParamDefinition = {
 	label: string;
@@ -15,6 +20,8 @@ export type RecipeParamDefinition = {
 	description?: string;
 	default?: unknown;
 	placeholder?: string;
+	/** Allowed choices for `type: "enum"` (rendered as a select). */
+	options?: RecipeParamOption[];
 };
 
 export type RecipeParamDefinitions = Record<string, RecipeParamDefinition>;
@@ -65,7 +72,17 @@ function detectFieldType(schema: z.ZodTypeAny): RecipeParamType | null {
 	if (t === "string") return "string";
 	if (t === "number") return "number";
 	if (t === "boolean") return "boolean";
+	if (t === "enum") return "enum";
 	return null;
+}
+
+/** Read the allowed values of a `z.enum([...])` field as select options. */
+function readEnumOptions(schema: z.ZodTypeAny): RecipeParamOption[] {
+	const base = unwrapToBaseType(schema) as unknown as {
+		options?: readonly string[];
+	};
+	const values = Array.isArray(base.options) ? base.options : [];
+	return values.map((value) => ({ value, label: humanizeKey(value) }));
 }
 
 /**
@@ -143,6 +160,7 @@ export function zodObjectToParamDefinitions(
 			...(meta.placeholder !== undefined
 				? { placeholder: meta.placeholder }
 				: {}),
+			...(type === "enum" ? { options: readEnumOptions(fieldSchema) } : {}),
 		};
 	}
 

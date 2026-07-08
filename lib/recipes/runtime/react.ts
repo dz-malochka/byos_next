@@ -1,6 +1,7 @@
 import { cache } from "react";
 import { z } from "zod";
 import { getScreenParams } from "@/app/actions/screens-params";
+import { resolveDuplicateBaseSlug } from "@/lib/recipes/duplicates";
 import { getReactRecipeDefinition } from "@/lib/recipes/registry";
 import type { AnyRecipeDefinition } from "@/lib/recipes/types";
 import { zodObjectToParamDefinitions } from "@/lib/recipes/zod-form";
@@ -94,7 +95,15 @@ export const resolveReactRecipe = cache(
 		slug: string,
 		userId?: string,
 	): Promise<ResolvedReactRecipe | null> => {
-		const definition = await getReactRecipeDefinition(slug);
+		// A built-in React recipe resolves straight from the registry. A user's
+		// duplicate has its own slug (not in the registry) but reuses the base
+		// recipe's component via `metadata.baseSlug`; its params live under the
+		// duplicate's own slug so each copy is independently configurable.
+		let definition = await getReactRecipeDefinition(slug);
+		if (!definition) {
+			const baseSlug = await resolveDuplicateBaseSlug(slug, userId);
+			if (baseSlug) definition = await getReactRecipeDefinition(baseSlug);
+		}
 		if (!definition) return null;
 
 		// Read user-saved param overrides. Pass paramDefinitions so

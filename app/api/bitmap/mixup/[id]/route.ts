@@ -1,5 +1,6 @@
 import type { NextRequest } from "next/server";
 import sharp from "sharp";
+import { getActivePlaylistItem } from "@/app/api/display/utils";
 import { getCurrentUserId } from "@/lib/auth/get-user";
 import {
 	withDeviceApiKey,
@@ -9,6 +10,7 @@ import { checkDbConnection } from "@/lib/database/utils";
 import { resolveDeviceProfileForRequest } from "@/lib/device/device-profile-request";
 import { parseRequestHeaders } from "@/lib/device/request-headers";
 import { getLayoutById, type LayoutSlot } from "@/lib/mixup/constants";
+import { isMixupNode, treeToLayoutSlots } from "@/lib/mixup/layout-tree";
 import {
 	DEFAULT_IMAGE_HEIGHT,
 	DEFAULT_IMAGE_WIDTH,
@@ -62,12 +64,15 @@ export async function GET(
 		//     (mixup-list, device-view, device-edit-form) which can't add an
 		//     access_token to <img> srcs.
 		let userId: string | null = null;
+		// Timezone used to evaluate playlist item schedules. Known only on the
+		// device callback path; browser previews fall back to UTC.
+		let timezone = "UTC";
 
 		if (accessToken) {
 			const device = await withDeviceApiKey(accessToken, (scopedDb) =>
 				scopedDb
 					.selectFrom("devices")
-					.select(["user_id", "mixup_id", "model", "palette_id"])
+					.select(["user_id", "mixup_id", "model", "palette_id", "timezone"])
 					.where("api_key", "=", accessToken)
 					.executeTakeFirst(),
 			);
@@ -76,6 +81,7 @@ export async function GET(
 				return new Response("Mixup not found", { status: 404 });
 			}
 			userId = device.user_id;
+			timezone = device.timezone || "UTC";
 		} else {
 			const sessionUserId = await getCurrentUserId();
 			if (!sessionUserId) {
@@ -115,6 +121,8 @@ export async function GET(
 						"mixup_slots.mixup_id",
 						"mixup_slots.slot_id",
 						"mixup_slots.recipe_id",
+						"mixup_slots.playlist_id",
+						"mixup_slots.current_index",
 						"mixup_slots.order_index",
 						"recipes.slug as resolved_slug",
 					])
@@ -129,16 +137,52 @@ export async function GET(
 			return new Response("Mixup not found", { status: 404 });
 		}
 
-		const layout = getLayoutById(mixup.layout_id, width, height);
-		if (!layout) {
-			logger.warn(`Invalid layout for mixup ${mixupId}: ${mixup.layout_id}`);
-			return new Response("Invalid layout", { status: 400 });
+		// Prefer a custom free-form split-tree layout when the mixup has one;
+		// otherwise fall back to the fixed preset identified by layout_id.
+		let layoutSlots: LayoutSlot[];
+		if (isMixupNode(mixup.layout_tree)) {
+			layoutSlots = treeToLayoutSlots(mixup.layout_tree, width, height);
+		} else {
+			const layout = getLayoutById(mixup.layout_id, width, height);
+			if (!layout) {
+				logger.warn(`Invalid layout for mixup ${mixupId}: ${mixup.layout_id}`);
+				return new Response("Invalid layout", { status: 400 });
+			}
+			layoutSlots = layout.slots;
 		}
 
-		// Build slot assignments map, preferring the normalized recipe_id relation.
+		// Build slot assignments map (slot_id -> recipe slug to render).
+		// Recipe slots use the joined slug directly. Playlist slots resolve the
+		// active item (honoring its time/day schedule) and advance the slot's
+		// stored index so the slot rotates on each refresh, like device-level
+		// playlists do.
 		const assignments: Record<string, string | null> = {};
 		for (const slot of slots) {
-			assignments[slot.slot_id] = slot.resolved_slug ?? null;
+			if (slot.resolved_slug) {
+				assignments[slot.slot_id] = slot.resolved_slug;
+				continue;
+			}
+			if (slot.playlist_id) {
+				const activeItem = await getActivePlaylistItem(
+					slot.playlist_id,
+					slot.current_index ?? 0,
+					timezone,
+					userId,
+				);
+				assignments[slot.slot_id] = activeItem?.screen_id ?? null;
+				if (activeItem) {
+					const nextIndex = activeItem.order_index;
+					await withExplicitUserScope(userId, (scopedDb) =>
+						scopedDb
+							.updateTable("mixup_slots")
+							.set({ current_index: nextIndex })
+							.where("id", "=", slot.id)
+							.execute(),
+					);
+				}
+				continue;
+			}
+			assignments[slot.slot_id] = null;
 		}
 
 		logger.info(
@@ -146,7 +190,7 @@ export async function GET(
 		);
 
 		const compositedPng = await renderMixupCompositePng(
-			layout.slots,
+			layoutSlots,
 			assignments,
 			width,
 			height,

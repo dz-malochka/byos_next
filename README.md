@@ -11,16 +11,18 @@
 [![GitHub Forks](https://img.shields.io/github/forks/usetrmnl/byos_next?style=social)](https://github.com/usetrmnl/byos_next/network/members)
 
 ## 🚀 Overview
-**BYOS (Build Your Own Server) Next.js** is a Next.js implementation that powers device management, playlist-driven content scheduling, and on-demand device image generation for e-ink displays.
+**BYOS (Build Your Own Server) Next.js** is a Next.js implementation that powers device management, playlist-driven content scheduling, multi-recipe mixup layouts, and on-demand device image generation for e-ink displays.
 
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Fusetrmnl%2Fbyos_next&env=AUTH_ENABLED&envDefaults=%7B%22AUTH_ENABLED%22%3A%22false%22%7D&envDescription=User%20authentication%20is%20disabled.&envLink=https%3A%2F%2Fgithub.com%2Fusetrmnl%2Fbyos_next%3Ftab%3Dreadme-ov-file&project-name=byos-next&repository-name=byos_next&demo-title=BYOS%20NextJS&demo-description=BYOS%20(Build%20Your%20Own%20Server)%20Next.js%2C%20TRMNL%20server%20with%20local%20recipe%20rendering%20and%20cloud%20proxy%20support.&demo-url=https%3A%2F%2Fbyos-next-demo.vercel.app&demo-image=https%3A%2F%2Fusetrmnl.com%2Fimages%2Fbrand%2Ficons%2Ficon--brand.svg&products=%5B%7B%22type%22%3A%22integration%22%2C%22integrationSlug%22%3A%22neon%22%2C%22productSlug%22%3A%22neon%22%2C%22protocol%22%3A%22storage%22%2C%22group%22%3A%22postgres%22%7D%5D)
 
 ### ✨ Features
 - Device management UI with MAC/API key registration, status tracking, and refresh scheduling.
 - Playlist-based screen rotation with time and weekday rules, custom durations, and per-device assignment.
+- **Mixups**: compose several recipes on one screen with free-form, resizable split layouts (split any area horizontally/vertically and drag the dividers), assign a recipe **or a rotating playlist** to each area, and preview on a selected device's display.
+- **Recipe management**: duplicate any recipe into an independently configurable copy, rename recipes, and hide them from the sidebar tree — all per-user. Built-in recipes stay intact; a duplicate reuses the original's renderer with its own settings.
 - On-demand screen rendering via Takumi/Satori with model-driven image encoding, palette hard snap, and default image-only dithering.
-- Postgres backed persistence for devices, logs, and playlists.
-- Recipes gallery to prototype screens and compare direct vs. bitmap rendering before pushing to hardware.
+- Postgres backed persistence for devices, logs, playlists, mixups, and recipes.
+- Recipes gallery with built-ins for weather, calendar, RSS/Atom feeds, Hacker News, an internet-availability monitor, and more — plus direct vs. bitmap rendering comparison.
 - Tailwind v4 + TypeScript + Next.js 16 + React 19; Biome lint/format baseline.
 - Docker Compose for app + Postgres; deploy-ready Vercel button with Supabase/Neon integration.
 
@@ -40,6 +42,7 @@
     - [Database Options](#database-options)
   - [Project Structure](#project-structure)
   - [Playlists](#playlists)
+  - [Mixups](#mixups)
   - [Recipes](#recipes)
   - [Documentation](#documentation)
   - [Roadmap](#roadmap)
@@ -144,8 +147,23 @@ The first account created during setup is assigned the admin role automatically.
 - Assign playlists to devices to rotate content automatically.
 - Enable playlist mode per device in the UI.
 
+## Mixups
+Combine multiple recipes on a single screen at `/mixup`:
+- **Free-form layouts** — start from a template, then split any area horizontally or vertically and drag the dividers to resize. Layouts are stored per mixup as a split tree; the five original presets still work.
+- **Per-area content** — assign a recipe **or a playlist** to each area. Playlist areas rotate to the next scheduled item on every refresh, honoring the item's time/day rules.
+- **Device-accurate preview** — pick one of your devices to preview the composition at its resolution/palette; a single device is selected automatically.
+
+Requires migrations `0023`–`0024` (added `mixups.layout_tree` and `mixup_slots.playlist_id` / `current_index`).
+
 ## Recipes
-Visit `/recipes` to browse screens and compare direct vs. bitmap rendering. To add one:
+Visit `/recipes` to browse screens and compare direct vs. bitmap rendering.
+
+**Managing recipes** (per-user):
+- **Duplicate** any recipe (built-in or community) into an independently configurable copy. Duplicates reuse the original's renderer via `metadata.baseSlug` and get their own settings.
+- **Rename** and **hide** recipes from the tree menu, via each card's menu on the All Recipes page or the recipe detail page. Built-in recipes can't be deleted (only hidden), but their settings and name can still be adjusted.
+- Requires migration `0025` (adds the `recipe_prefs` table); the UI degrades gracefully until it's applied.
+
+**Adding a built-in recipe:**
 1. Create a folder under `app/(app)/recipes/screens/<slug>/`.
 2. Add `<slug>.tsx` exporting `paramsSchema`, `dataSchema`, and a
    `definition` of type `RecipeDefinition<P, D>`.
@@ -160,7 +178,7 @@ See `docs/recipes.md` for the full pattern, including data fetching.
 - Contributing guide: `CONTRIBUTING.md`
 
 ## Roadmap
-- Better recipe management system
+- ✅ Recipe management (duplicate, rename, hide, delete) and mixups with free-form layouts
 - Compatibility with TRMNL recipes
 
 ## Support & Feedback

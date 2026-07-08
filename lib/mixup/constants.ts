@@ -277,6 +277,14 @@ export const LAYOUT_OPTIONS: LayoutOption[] = RELATIVE_LAYOUT_OPTIONS.map(
 	},
 );
 
+/**
+ * What a mixup slot displays: either a single recipe or a rotating playlist.
+ * Keyed by leaf/slot id in the builder and persisted to mixup_slots.
+ */
+export type SlotAssignment =
+	| { kind: "recipe"; id: string }
+	| { kind: "playlist"; id: string };
+
 export const buildAssignments = (
 	layout: LayoutOption,
 	recipes: Array<{ id: string }>,
@@ -303,12 +311,15 @@ export const slotsToAssignments = (
 	slots: Array<{
 		slot_id: string;
 		recipe_id: string | null;
+		playlist_id?: string | null;
 	}>,
-): Record<string, string> => {
-	const assignments: Record<string, string> = {};
+): Record<string, SlotAssignment> => {
+	const assignments: Record<string, SlotAssignment> = {};
 	for (const slot of slots) {
 		if (slot.recipe_id) {
-			assignments[slot.slot_id] = slot.recipe_id;
+			assignments[slot.slot_id] = { kind: "recipe", id: slot.recipe_id };
+		} else if (slot.playlist_id) {
+			assignments[slot.slot_id] = { kind: "playlist", id: slot.playlist_id };
 		}
 	}
 	return assignments;

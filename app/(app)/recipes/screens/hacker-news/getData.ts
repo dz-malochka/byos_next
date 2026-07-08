@@ -1,12 +1,5 @@
-import qrcode from "qrcode-generator";
-
 // Live data — always fetch fresh.
 export const dynamic = "force-dynamic";
-
-type HackerNewsParams = {
-	storyCount?: number | string;
-	qrTarget?: string; // "article" (default) or "comments"
-};
 
 interface Story {
 	rank: number;
@@ -15,8 +8,6 @@ interface Story {
 	comments: number;
 	by: string;
 	domain: string;
-	qrPath: string;
-	qrSize: number;
 }
 
 export interface HackerNewsData {
@@ -27,11 +18,9 @@ export interface HackerNewsData {
 
 const HN_API = "https://hacker-news.firebaseio.com/v0";
 
-function toCount(v: unknown, def: number): number {
-	const n = typeof v === "number" ? v : Number(v);
-	if (!Number.isFinite(n)) return def;
-	return Math.min(10, Math.max(1, Math.round(n)));
-}
+// Fetch a generous pool so the list fills any screen; the component renders as
+// many as fit and clips the rest.
+const STORY_COUNT = 30;
 
 function domainOf(url: string | undefined): string {
 	if (!url) return "news.ycombinator.com";
@@ -40,21 +29,6 @@ function domainOf(url: string | undefined): string {
 	} catch {
 		return "";
 	}
-}
-
-// Build an SVG path (one rect per dark module) for the QR encoding `text`.
-function qrPath(text: string): { qrPath: string; qrSize: number } {
-	const qr = qrcode(0, "L"); // auto version, low error correction = fewer modules
-	qr.addData(text);
-	qr.make();
-	const size = qr.getModuleCount();
-	let d = "";
-	for (let r = 0; r < size; r++) {
-		for (let c = 0; c < size; c++) {
-			if (qr.isDark(r, c)) d += `M${c} ${r}h1v1h-1z`;
-		}
-	}
-	return { qrPath: d, qrSize: size };
 }
 
 async function fetchJson<T>(
@@ -69,12 +43,7 @@ async function fetchJson<T>(
 	}
 }
 
-export default async function getData(
-	params?: HackerNewsParams,
-): Promise<HackerNewsData> {
-	const count = toCount(params?.storyCount, 6);
-	const useComments = params?.qrTarget?.trim().toLowerCase() === "comments";
-
+export default async function getData(): Promise<HackerNewsData> {
 	const updatedLabel = new Intl.DateTimeFormat("en-US", {
 		hour: "numeric",
 		minute: "2-digit",
@@ -97,7 +66,7 @@ export default async function getData(
 		}
 
 		const items = await Promise.all(
-			ids.slice(0, count).map((id) =>
+			ids.slice(0, STORY_COUNT).map((id) =>
 				fetchJson<{
 					id: number;
 					title?: string;
@@ -111,19 +80,14 @@ export default async function getData(
 
 		const stories: Story[] = items
 			.filter((it): it is NonNullable<typeof it> => Boolean(it?.title))
-			.map((it, i) => {
-				const hnUrl = `https://news.ycombinator.com/item?id=${it.id}`;
-				const target = useComments ? hnUrl : it.url || hnUrl;
-				return {
-					rank: i + 1,
-					title: it.title as string,
-					score: it.score ?? 0,
-					comments: it.descendants ?? 0,
-					by: it.by ?? "",
-					domain: useComments ? "news.ycombinator.com" : domainOf(it.url),
-					...qrPath(target),
-				};
-			});
+			.map((it, i) => ({
+				rank: i + 1,
+				title: it.title as string,
+				score: it.score ?? 0,
+				comments: it.descendants ?? 0,
+				by: it.by ?? "",
+				domain: domainOf(it.url),
+			}));
 
 		if (stories.length === 0) {
 			return {

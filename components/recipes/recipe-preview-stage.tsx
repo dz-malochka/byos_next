@@ -54,6 +54,9 @@ interface RecipePreviewStageProps {
 	/** When provided, a model selector drives device / React preview resolution. */
 	trmnlModels?: PreviewModel[];
 	trmnlPalettes?: PreviewPalette[];
+	/** Preselect the dropdown to the user's device model/palette when available. */
+	preferredModelName?: string;
+	preferredPaletteId?: string;
 	/**
 	 * When false, the React tab keeps the server-rendered preview (e.g. Liquid
 	 * recipes: `/recipes/.../preview` only exists for React components).
@@ -76,6 +79,8 @@ export function RecipePreviewStage({
 	defaultFormat = "device",
 	trmnlModels,
 	trmnlPalettes,
+	preferredModelName,
+	preferredPaletteId,
 	simulateReactPreviewInIframe = true,
 }: RecipePreviewStageProps) {
 	const router = useRouter();
@@ -91,15 +96,22 @@ export function RecipePreviewStage({
 			),
 		[trmnlModels],
 	);
-	const [modelName, setModelName] = useState<string>(() => {
-		if (!sortedModels.length) return DEFAULT_MODEL_NAME;
-		const preferred = sortedModels.find((m) => m.name === DEFAULT_MODEL_NAME);
-		return preferred?.name ?? sortedModels[0].name;
-	});
+	// Prefer the user's device model when it's one of the available models,
+	// then fall back to the platform default, then the first model.
+	const initialModelName = sortedModels.length
+		? preferredModelName &&
+			sortedModels.some((m) => m.name === preferredModelName)
+			? preferredModelName
+			: (sortedModels.find((m) => m.name === DEFAULT_MODEL_NAME)?.name ??
+				sortedModels[0].name)
+		: DEFAULT_MODEL_NAME;
+	const [modelName, setModelName] = useState<string>(initialModelName);
 	const initialModel =
-		sortedModels.find((m) => m.name === DEFAULT_MODEL_NAME) ?? sortedModels[0];
+		sortedModels.find((m) => m.name === initialModelName) ?? null;
 	const [paletteId, setPaletteId] = useState<string>(() =>
-		chooseDefaultPaletteId(initialModel ?? null),
+		preferredPaletteId && initialModel?.palette_ids.includes(preferredPaletteId)
+			? preferredPaletteId
+			: chooseDefaultPaletteId(initialModel),
 	);
 	const [loadedReactPreviewSrc, setLoadedReactPreviewSrc] = useState<
 		string | null

@@ -15,6 +15,7 @@ import {
 	resolveUserIdFromApiKey,
 } from "@/lib/device/request-headers";
 import { logError, logInfo, logWarn } from "@/lib/logger";
+import { isTimeInRange, pickActivePlaylistItem } from "@/lib/playlist/rotation";
 import { logger } from "@/lib/recipes/logger";
 import {
 	type ModelStorageResolution,
@@ -60,17 +61,6 @@ export const precacheImageInBackground = (
 				metadata: { imageUrl, error: error.message, friendlyId },
 			});
 		});
-};
-
-export const isTimeInRange = (
-	timeToCheck: string,
-	startTime: string,
-	endTime: string,
-): boolean => {
-	if (startTime > endTime) {
-		return timeToCheck >= startTime || timeToCheck < endTime;
-	}
-	return timeToCheck >= startTime && timeToCheck < endTime;
 };
 
 export const calculateRefreshRate = (
@@ -168,28 +158,12 @@ export const getActivePlaylistItem = async (
 		metadata,
 	});
 
-	for (let i = 1; i < items.length + 1; i++) {
-		const itemIndex = (currentIndex + i) % items.length;
-		const item = items[itemIndex];
-
-		const days_of_week = item.days_of_week as string[] | null;
-		const start_time = item.start_time;
-		const end_time = item.end_time;
-
-		const isTimeValid =
-			!start_time ||
-			!end_time ||
-			isTimeInRange(currentTime, start_time, end_time);
-		const isDayValid =
-			!days_of_week ||
-			(Array.isArray(days_of_week) && days_of_week.includes(currentDay));
-
-		if (isTimeValid && isDayValid) {
-			return item as unknown as PlaylistItem;
-		}
-	}
-
-	return null;
+	return pickActivePlaylistItem(
+		items,
+		currentIndex,
+		currentTime,
+		currentDay,
+	) as unknown as PlaylistItem | null;
 };
 
 // --- Device Management ---

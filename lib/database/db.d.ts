@@ -147,6 +147,7 @@ export interface Mixups {
 	created_at: Generated<Timestamp | null>;
 	id: Generated<string>;
 	layout_id: MixupLayoutId;
+	layout_tree: Json | null;
 	name: string;
 	updated_at: Generated<Timestamp | null>;
 	user_id: string | null;
@@ -154,9 +155,11 @@ export interface Mixups {
 
 export interface MixupSlots {
 	created_at: Generated<Timestamp | null>;
+	current_index: Generated<number>;
 	id: Generated<string>;
 	mixup_id: string | null;
 	order_index: number;
+	playlist_id: string | null;
 	recipe_id: string | null;
 	slot_id: string;
 }
@@ -241,6 +244,16 @@ export interface Recipes {
 	zip_url: string | null;
 }
 
+export interface RecipePrefs {
+	created_at: Generated<Timestamp | null>;
+	hidden: Generated<boolean>;
+	id: Generated<string>;
+	name: string | null;
+	slug: string;
+	updated_at: Generated<Timestamp | null>;
+	user_id: string;
+}
+
 export interface ScreenConfigs {
 	created_at: Generated<Timestamp | null>;
 	id: Generated<string>;
@@ -309,6 +322,7 @@ export interface DB {
 	plugin_settings: PluginSettings;
 	playlists: Playlists;
 	recipe_files: RecipeFiles;
+	recipe_prefs: RecipePrefs;
 	recipes: Recipes;
 	screen_configs: ScreenConfigs;
 	session: Session;
