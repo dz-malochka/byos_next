@@ -1,11 +1,25 @@
 "use client";
 
-import { Pause, Play, SkipBack, SkipForward } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Monitor, Pause, Play, SkipBack, SkipForward } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { PreviewDevice } from "@/app/actions/mixup";
 import { DeviceFrame } from "@/components/common/device-frame";
 import { ScreenPreviewImage } from "@/components/common/screen-preview-image";
 import { Button } from "@/components/ui/button";
-import { buildBitmapPreviewSrc } from "@/lib/render/preview-image";
+import {
+	Select,
+	SelectContent,
+	SelectGroup,
+	SelectItem,
+	SelectLabel,
+	SelectTrigger,
+	SelectValue,
+} from "@/components/ui/select";
+import { getOrientedDeviceDimensions } from "@/lib/device/dimensions";
+import {
+	buildBitmapPreviewSrc,
+	buildScreenPreviewSrc,
+} from "@/lib/render/preview-image";
 import { cn } from "@/lib/utils";
 
 export interface PreviewFrame {
@@ -17,17 +31,43 @@ export interface PreviewFrame {
 
 interface PlaylistLivePreviewProps {
 	frames: PreviewFrame[];
+	devices: PreviewDevice[];
 	activeIndex: number;
 	onActiveIndexChange: (index: number) => void;
 }
 
+const isDeviceOnline = (device: PreviewDevice): boolean =>
+	device.next_expected_update
+		? new Date(device.next_expected_update).getTime() > Date.now()
+		: false;
+
 export function PlaylistLivePreview({
 	frames,
+	devices,
 	activeIndex,
 	onActiveIndexChange,
 }: PlaylistLivePreviewProps) {
 	const [isPlaying, setIsPlaying] = useState(false);
 	const [progress, setProgress] = useState(0);
+
+	// Preview device: a single device is auto-selected; otherwise the first
+	// online device; otherwise the generic display.
+	const [previewDeviceId, setPreviewDeviceId] = useState<string>(() => {
+		if (devices.length === 1) return devices[0].id;
+		return devices.find(isDeviceOnline)?.id ?? "default";
+	});
+	const selectedDevice = useMemo(
+		() => devices.find((d) => d.id === previewDeviceId) ?? null,
+		[devices, previewDeviceId],
+	);
+	const deviceProfile = selectedDevice
+		? { model: selectedDevice.model, palette_id: selectedDevice.palette_id }
+		: null;
+	const {
+		width: canvasW,
+		height: canvasH,
+		isPortrait,
+	} = getOrientedDeviceDimensions(selectedDevice);
 
 	// Deleting the last/selected frame leaves activeIndex out of bounds for one
 	// render (parent clamps it via effect afterwards); fall back to the last
@@ -98,16 +138,64 @@ export function PlaylistLivePreview({
 
 	return (
 		<div className="flex flex-col gap-4">
-			<div className="relative mx-auto w-full max-w-[640px]">
-				<DeviceFrame size="lg">
+			{devices.length > 0 && (
+				<div className="mx-auto flex w-full max-w-[640px] justify-end">
+					<Select value={previewDeviceId} onValueChange={setPreviewDeviceId}>
+						<SelectTrigger
+							className="h-7 w-[260px] max-w-full text-xs"
+							aria-label="Preview device"
+						>
+							<Monitor className="mr-1 h-3 w-3 text-muted-foreground" />
+							<SelectValue placeholder="Preview device" />
+						</SelectTrigger>
+						<SelectContent>
+							<SelectItem value="default">Default display</SelectItem>
+							<SelectGroup>
+								<SelectLabel>Devices</SelectLabel>
+								{devices.map((device) => {
+									const dims = getOrientedDeviceDimensions(device);
+									return (
+										<SelectItem key={device.id} value={device.id}>
+											{device.name}
+											<span className="ml-1 text-muted-foreground tabular-nums">
+												{dims.width}×{dims.height}
+											</span>
+										</SelectItem>
+									);
+								})}
+							</SelectGroup>
+						</SelectContent>
+					</Select>
+				</div>
+			)}
+			<div
+				className={cn(
+					"relative mx-auto w-full",
+					isPortrait ? "max-w-[360px]" : "max-w-[640px]",
+				)}
+			>
+				<DeviceFrame
+					size="lg"
+					portrait={isPortrait}
+					screenAspectRatio={`${canvasW} / ${canvasH}`}
+				>
 					{isEmpty ? (
 						<div className="absolute inset-0 flex items-center justify-center text-sm text-neutral-500">
 							Add a frame to preview the playlist
 						</div>
 					) : (
 						<ScreenPreviewImage
-							key={active.id}
-							src={buildBitmapPreviewSrc(active.screen_id)}
+							key={`${active.id}:${previewDeviceId}`}
+							src={
+								deviceProfile
+									? buildScreenPreviewSrc(
+											active.screen_id,
+											deviceProfile,
+											canvasW,
+											canvasH,
+										)
+									: buildBitmapPreviewSrc(active.screen_id)
+							}
 							alt={active.label}
 							className="absolute inset-0"
 						/>

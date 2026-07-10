@@ -4,6 +4,7 @@ import { Plus } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
+import type { PreviewDevice } from "@/app/actions/mixup";
 import { deletePlaylist, savePlaylistWithItems } from "@/app/actions/playlist";
 import { PlaylistBuilder } from "@/components/playlists/playlist-builder";
 import { PlaylistList } from "@/components/playlists/playlist-list";
@@ -14,12 +15,14 @@ interface PlaylistsClientPageProps {
 	initialPlaylists: Playlist[];
 	initialPlaylistItems: PlaylistItem[];
 	recipes: Recipe[];
+	devices: PreviewDevice[];
 }
 
 export default function PlaylistsClientPage({
 	initialPlaylists,
 	initialPlaylistItems,
 	recipes,
+	devices,
 }: PlaylistsClientPageProps) {
 	const router = useRouter();
 	const [showEditor, setShowEditor] = useState(false);
@@ -132,6 +135,7 @@ export default function PlaylistsClientPage({
 						: undefined
 				}
 				recipes={recipes}
+				devices={devices}
 				onSave={handleSavePlaylist}
 				onCancel={handleCancel}
 				isSaving={isLoading}

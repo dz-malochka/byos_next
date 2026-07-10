@@ -331,7 +331,7 @@ export async function fetchRecipes(): Promise<Recipe[]> {
 	return visible as unknown as Recipe[];
 }
 
-export type MixupPreviewDevice = {
+export type PreviewDevice = {
 	id: string;
 	name: string;
 	model: string | null;
@@ -339,13 +339,19 @@ export type MixupPreviewDevice = {
 	screen_width: number | null;
 	screen_height: number | null;
 	screen_orientation: string | null;
+	/** ISO timestamp; used to tell whether the device is currently online. */
+	next_expected_update: string | null;
 };
+
+/** @deprecated Use PreviewDevice. */
+export type MixupPreviewDevice = PreviewDevice;
 
 /**
  * Devices the current user owns, with just the fields needed to preview a
- * mixup on a specific device's display (profile + resolution/orientation).
+ * recipe/mixup/playlist on a specific device's display (profile,
+ * resolution/orientation, and online status).
  */
-export async function fetchMixupDevices(): Promise<MixupPreviewDevice[]> {
+export async function fetchPreviewDevices(): Promise<PreviewDevice[]> {
 	const { ready } = await checkDbConnection();
 
 	if (!ready) {
@@ -364,6 +370,7 @@ export async function fetchMixupDevices(): Promise<MixupPreviewDevice[]> {
 				"screen_width",
 				"screen_height",
 				"screen_orientation",
+				"next_expected_update",
 			])
 			.orderBy("name", "asc")
 			.execute(),
@@ -377,5 +384,12 @@ export async function fetchMixupDevices(): Promise<MixupPreviewDevice[]> {
 		screen_width: d.screen_width,
 		screen_height: d.screen_height,
 		screen_orientation: d.screen_orientation,
+		next_expected_update:
+			d.next_expected_update instanceof Date
+				? d.next_expected_update.toISOString()
+				: (d.next_expected_update ?? null),
 	}));
 }
+
+/** @deprecated Use fetchPreviewDevices. */
+export const fetchMixupDevices = fetchPreviewDevices;

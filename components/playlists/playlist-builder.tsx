@@ -2,6 +2,7 @@
 
 import { ArrowLeft, Save } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import type { PreviewDevice } from "@/app/actions/mixup";
 import { fetchPlaylistWithItems } from "@/app/actions/playlist";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,6 +22,7 @@ interface PlaylistBuilderProps {
 		items?: FrameData[];
 	};
 	recipes: Recipe[];
+	devices: PreviewDevice[];
 	onSave: (data: { id?: string; name: string; items: FrameData[] }) => void;
 	onCancel: () => void;
 	isSaving?: boolean;
@@ -29,6 +31,7 @@ interface PlaylistBuilderProps {
 export function PlaylistBuilder({
 	playlist,
 	recipes,
+	devices,
 	onSave,
 	onCancel,
 	isSaving = false,
@@ -201,6 +204,7 @@ export function PlaylistBuilder({
 					) : (
 						<PlaylistLivePreview
 							frames={previewFrames}
+							devices={devices}
 							activeIndex={activeIndex}
 							onActiveIndexChange={setActiveIndex}
 						/>
