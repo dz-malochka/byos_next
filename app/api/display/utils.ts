@@ -166,6 +166,48 @@ export const getActivePlaylistItem = async (
 	) as unknown as PlaylistItem | null;
 };
 
+/**
+ * For a mixup, the shortest active-playlist-item duration across its playlist
+ * slots (or null if it has none). Used to speed up the mixup's refresh so its
+ * embedded playlists rotate close to their intended cadence — each device poll
+ * advances every playlist slot by one item.
+ */
+export const getMixupMinPlaylistDuration = async (
+	mixupId: string,
+	timezone: string = "UTC",
+	userId?: string | null,
+): Promise<number | null> => {
+	const { ready } = await checkDbConnection();
+	if (!ready) return null;
+
+	const runSlots = (conn: typeof db) =>
+		conn
+			.selectFrom("mixup_slots")
+			.select(["playlist_id", "current_index"])
+			.where("mixup_id", "=", mixupId)
+			.where("playlist_id", "is not", null)
+			.execute();
+
+	const slots = userId
+		? await withExplicitUserScope(userId, runSlots)
+		: await runSlots(db);
+
+	let min: number | null = null;
+	for (const slot of slots) {
+		if (!slot.playlist_id) continue;
+		const item = await getActivePlaylistItem(
+			slot.playlist_id,
+			slot.current_index ?? 0,
+			timezone,
+			userId,
+		);
+		if (item && typeof item.duration === "number" && item.duration > 0) {
+			min = min === null ? item.duration : Math.min(min, item.duration);
+		}
+	}
+	return min;
+};
+
 // --- Device Management ---
 
 export const updateDeviceStatus = async (

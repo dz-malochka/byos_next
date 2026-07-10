@@ -21,6 +21,7 @@ import {
 	calculateRefreshRate,
 	findOrCreateDevice,
 	getActivePlaylistItem,
+	getMixupMinPlaylistDuration,
 	precacheImageInBackground,
 	updateDeviceStatus,
 } from "./utils";
@@ -177,11 +178,26 @@ export async function GET(request: Request) {
 						},
 					});
 				}
-				dynamicRefreshRate = calculateRefreshRate(
-					normalizeRefreshSchedule(device.refresh_schedule),
-					DEFAULT_REFRESH_RATE,
-					device.timezone || "UTC",
-				);
+				{
+					const scheduleRate = calculateRefreshRate(
+						normalizeRefreshSchedule(device.refresh_schedule),
+						DEFAULT_REFRESH_RATE,
+						device.timezone || "UTC",
+					);
+					// If the mixup embeds any playlists, refresh at least as often as
+					// the shortest active item's duration so those slots rotate on time.
+					const playlistMin = device.mixup_id
+						? await getMixupMinPlaylistDuration(
+								device.mixup_id,
+								device.timezone || "UTC",
+								device.user_id,
+							)
+						: null;
+					dynamicRefreshRate =
+						playlistMin !== null
+							? Math.min(scheduleRate, playlistMin)
+							: scheduleRate;
+				}
 				break;
 
 			default:

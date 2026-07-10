@@ -32,7 +32,7 @@ RUN pnpm run build \
     && rm -rf node_modules/.cache
 
 # Production image - chromedp/headless-shell for minimal Chrome footprint
-FROM chromedp/headless-shell:146.0.7655.3 AS runner
+FROM docker.io/chromedp/headless-shell:146.0.7655.3 AS runner
 
 WORKDIR /app
 
